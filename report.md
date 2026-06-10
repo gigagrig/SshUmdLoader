@@ -104,3 +104,24 @@
 
 - `cmake --build build-debug -j $(nproc)`
 - `./build-debug/sshumdloader_core_smoke_test`
+
+## Дополнение. Статусные сообщения во время подготовки загрузки
+
+- Добавлены сообщения, чтобы после подключения к серверу было видно текущее действие приложения:
+  - загрузка конфигурации;
+  - результат чтения конфигурации;
+  - разбор CLI;
+  - параметры запроса;
+  - построение download plan;
+  - стартовый remote search root;
+  - сканируемая remote directory;
+  - количество найденных файлов;
+  - старт загрузок и лимит параллельности;
+  - успешное завершение загрузки.
+- Smoke test отвязан от пользовательского `SshUmdLoader.ini`: теперь создает временный INI fixture в `/tmp`.
+
+Проверка:
+
+- `cmake --build build-debug -j $(nproc)`
+- `./build-debug/sshumdloader_core_smoke_test`
+- `./build-debug/SshUmdLoader`

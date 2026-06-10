@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <sstream>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -86,6 +87,17 @@ struct SearchRoot {
   std::string relative_path;
 };
 
+std::string FormatSecurities(const std::vector<Security>& securities) {
+  std::ostringstream stream;
+  for (std::size_t i = 0; i < securities.size(); ++i) {
+    if (i > 0) {
+      stream << ", ";
+    }
+    stream << securities[i].ticker;
+  }
+  return stream.str();
+}
+
 std::vector<SearchRoot> BuildSearchRoots(const DownloadRequest& request) {
   std::set<std::string> boards;
   for (const Security& security : request.securities) {
@@ -120,6 +132,7 @@ void WalkRemoteTree(const DownloadRequest& request,
                     const std::string& remote_path,
                     const std::string& relative_path, bool inside_date_dir,
                     DownloadPlan* plan) {
+  std::cerr << "Scanning remote directory: " << remote_path << std::endl;
   const std::vector<RemoteEntry> entries =
       remote_repository->ListDirectory(request.server, remote_path);
   for (const RemoteEntry& entry : entries) {
@@ -175,9 +188,15 @@ DownloadPlan BuildDownloadPlanUseCase::Execute(const DownloadRequest& request) {
     throw std::invalid_argument("end_day must not be earlier than day");
   }
 
+  std::cerr << "Building download plan for server " << request.server.name
+            << ", dates " << request.date_range.start.ToString() << "..."
+            << request.date_range.end.ToString() << ", securities "
+            << FormatSecurities(request.securities) << std::endl;
+
   DownloadPlan plan;
   std::string last_search_error;
   for (const SearchRoot& search_root : BuildSearchRoots(request)) {
+    std::cerr << "Search root: " << search_root.remote_path << std::endl;
     try {
       WalkRemoteTree(request, remote_repository_, path_mapper_, transfer_policy_,
                      search_root.remote_path, search_root.relative_path, true,
@@ -199,6 +218,8 @@ DownloadPlan BuildDownloadPlanUseCase::Execute(const DownloadRequest& request) {
     throw std::runtime_error("No remote files matched the request" +
                              last_search_error);
   }
+  std::cerr << "Download plan ready: " << plan.tasks.size() << " file(s)"
+            << std::endl;
   return plan;
 }
 
@@ -215,8 +236,12 @@ void RunDownloadPlanUseCase::Execute(const UmdServer& server,
   if (max_concurrent_downloads < 1) {
     throw std::invalid_argument("MaxConcurrentDownloads must be positive");
   }
+  std::cerr << "Starting downloads: " << plan.tasks.size()
+            << " file(s), max concurrency " << max_concurrent_downloads
+            << std::endl;
   download_scheduler_->Run(server, plan.tasks, max_concurrent_downloads,
                            progress_sink_);
+  std::cerr << std::endl;
 }
 
 SshUmdLoaderApplication::SshUmdLoaderApplication(
@@ -234,10 +259,25 @@ int SshUmdLoaderApplication::Run(int argc, const char* const argv[]) {
       throw std::logic_error("Application dependencies are not set");
     }
 
+    std::cerr << "Loading configuration..." << std::endl;
     const AppConfig config = config_repository_->Load();
+    std::cerr << "Configuration loaded: " << config.servers.size()
+              << " server(s), MaxConcurrentDownloads="
+              << config.max_concurrent_downloads << std::endl;
+
+    std::cerr << "Parsing command line..." << std::endl;
     const DownloadRequest request = cli_parser_->Parse(argc, argv, config);
+    std::cerr << "Command line parsed: server=" << request.server.name
+              << ", securities=" << FormatSecurities(request.securities)
+              << ", day=" << request.date_range.start.ToString();
+    if (!(request.date_range.start == request.date_range.end)) {
+      std::cerr << ", end_day=" << request.date_range.end.ToString();
+    }
+    std::cerr << std::endl;
+
     const DownloadPlan plan = build_plan_->Execute(request);
     run_plan_->Execute(request.server, plan, config.max_concurrent_downloads);
+    std::cerr << "Download completed successfully" << std::endl;
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "SshUmdLoader error: " << error.what() << std::endl;

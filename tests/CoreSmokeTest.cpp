@@ -1,4 +1,6 @@
 #include <cassert>
+#include <cstdio>
+#include <fstream>
 #include <map>
 #include <string>
 #include <vector>
@@ -75,13 +77,36 @@ int main() {
   }
 
   {
-    sshumdloader::IniUmdConfigRepository config_repository(
-        "UmdServersConfig.ini");
+    const std::string config_path = "/tmp/sshumdloader_core_smoke_test.ini";
+    {
+      std::ofstream config_file(config_path.c_str(), std::ios::trunc);
+      config_file << "DownloadPath = ~/umd/\n"
+                  << "MaxConcurrentDownloads = 2\n"
+                  << "\n"
+                  << "[UmdServer0]\n"
+                  << "name = MOEX\n"
+                  << "host = example.invalid\n"
+                  << "port = 23\n"
+                  << "user = user\n"
+                  << "pass_base64 = 'cGFzcw=='\n"
+                  << "umd_path = /home/umd/\n"
+                  << "\n"
+                  << "[UmdServer1]\n"
+                  << "name = UMD-CA-NEW\n"
+                  << "host = example2.invalid\n"
+                  << "port = 23\n"
+                  << "user = user2\n"
+                  << "pass_base64 = 'cGFzczI='\n"
+                  << "umd_path = /home/\n";
+    }
+
+    sshumdloader::IniUmdConfigRepository config_repository(config_path);
     const sshumdloader::AppConfig config = config_repository.Load();
     assert(config.local_download_root == "~/umd/");
     assert(config.max_concurrent_downloads == 2);
     assert(config.servers.size() == 2);
     assert(config.servers[1].name == "UMD-CA-NEW");
+    std::remove(config_path.c_str());
   }
   return 0;
 }
