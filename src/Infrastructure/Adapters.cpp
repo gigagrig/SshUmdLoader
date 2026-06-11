@@ -329,6 +329,17 @@ std::string JoinRemotePath(const std::string& left, const std::string& right) {
   return left + "/" + right;
 }
 
+void CreateDirectoryIfMissing(const std::string& directory) {
+  if (mkdir(directory.c_str(), 0775) == 0) {
+    std::cerr << "Created directory: " << directory << std::endl;
+    return;
+  }
+  if (errno != EEXIST) {
+    throw std::runtime_error("mkdir failed for " + directory + ": " +
+                             strerror(errno));
+  }
+}
+
 void EnsureParentDirectory(const std::string& file_path) {
   const std::size_t slash_pos = file_path.find_last_of('/');
   if (slash_pos == std::string::npos) {
@@ -342,15 +353,10 @@ void EnsureParentDirectory(const std::string& file_path) {
     if (directory[i] != '/' || current.size() == 1) {
       continue;
     }
-    if (mkdir(current.c_str(), 0775) < 0 && errno != EEXIST) {
-      throw std::runtime_error("mkdir failed for " + current + ": " +
-                               strerror(errno));
-    }
+    CreateDirectoryIfMissing(current);
   }
-  if (!directory.empty() && mkdir(directory.c_str(), 0775) < 0 &&
-      errno != EEXIST) {
-    throw std::runtime_error("mkdir failed for " + directory + ": " +
-                             strerror(errno));
+  if (!directory.empty()) {
+    CreateDirectoryIfMissing(directory);
   }
 }
 
@@ -767,7 +773,7 @@ void Libssh2DownloadScheduler::Run(const UmdServer& server,
           progress_sink->OnProgress(ProgressEvent{
               DownloadStatus::kCompleted, transfer->task,
               transfer->task.remote_file.size, transfer->task.remote_file.size,
-              "completed"});
+              "saved to " + transfer->task.transfer.local_path});
         }
         continue;
       }
